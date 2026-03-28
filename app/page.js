@@ -37,7 +37,7 @@ export default function Home() {
   const [status, setStatus]       = useState('checking');
   const [input, setInput]         = useState('');
   const [error, setError]         = useState('');
-  const [activeTab, setActiveTab] = useState('checklist');
+  const [activeTab, setActiveTab] = useState('projects');
 
   useEffect(() => {
     const ok = sessionStorage.getItem('raisa_ok');
