@@ -47,6 +47,11 @@ create table dossiers (
   dossier_format  text default 'CTD',  -- CTD or ACTD
   m4q_version     text default 'R1',   -- R1 or R2
   status          text default 'draft',-- draft, in_progress, submitted, approved
+  inn             text,                -- API / INN name for 3.2.S labels
+  api_manufacturer text,              -- API manufacturer for 3.2.S labels
+  dosage_form     text,                -- dosage form for 3.2.P labels
+  strength        text,                -- strength for 3.2.P labels
+  applicant       text,                -- applicant / company name
   created_at      timestamptz default now(),
   updated_at      timestamptz default now()
 );

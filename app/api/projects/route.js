@@ -42,11 +42,19 @@ export async function GET(request) {
     if (type === 'dossiers' || type === 'dossier') {
       const { data, error } = await db
         .from('dossiers')
-        .select('*, dossier_nodes(count), documents(count)')
+        .select('*, products(name, inn, dosage_form, strength, category), dossier_nodes(count), documents(count)')
         .eq('product_id', parent_id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return Response.json({ data });
+      // Flatten product data into dossier for easy access
+      const enriched = (data || []).map(d => ({
+        ...d,
+        product_name: d.products?.name || d.product_name || '',
+        product_inn: d.products?.inn || d.inn || '',
+        product_dosage_form: d.products?.dosage_form || d.dosage_form || '',
+        product_strength: d.products?.strength || d.strength || '',
+      }));
+      return Response.json({ data: enriched });
     }
 
   } catch (err) {
@@ -79,6 +87,12 @@ export async function POST(request) {
     }
     if (tableName === 'dossiers') {
       delete insertData.project_id;  // dossiers links via product_id, not project_id
+      // Only keep known dossier columns — strip form-only fields that may not exist in DB yet
+      const dossierCols = ['product_id','country','authority','submission_type','dossier_format',
+        'm4q_version','status','inn','api_manufacturer','dosage_form','strength','applicant'];
+      Object.keys(insertData).forEach(k => {
+        if (!dossierCols.includes(k)) delete insertData[k];
+      });
     }
     // clients and products keep their project_id — no change needed
     const { data: result, error } = await db
@@ -87,7 +101,31 @@ export async function POST(request) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If error is about unknown columns, retry without new fields
+      if (error.message && (error.message.includes('column') || error.message.includes('inn') ||
+          error.message.includes('api_manufacturer') || error.message.includes('dosage_form'))) {
+        const fallbackData = { ...insertData };
+        delete fallbackData.inn;
+        delete fallbackData.api_manufacturer;
+        delete fallbackData.dosage_form;
+        delete fallbackData.strength;
+        delete fallbackData.applicant;
+        const { data: r2, error: e2 } = await db.from(tableName).insert(fallbackData).select().single();
+        if (e2) throw e2;
+        // If creating a dossier, auto-generate nodes
+        if (type === 'dossiers' || type === 'dossier') {
+          // Attach form metadata to result for node generation
+          r2.inn = insertData.inn;
+          r2.api_manufacturer = insertData.api_manufacturer;
+          r2.dosage_form = insertData.dosage_form;
+          r2.strength = insertData.strength;
+          try { await generateDossierNodes(db, r2); } catch(e) { console.error('Node gen error:', e.message); }
+        }
+        return Response.json({ data: r2 });
+      }
+      throw error;
+    }
 
     // If creating a dossier, auto-generate nodes from the checklist
     if (type === 'dossiers' || type === 'dossier') {

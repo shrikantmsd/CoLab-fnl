@@ -201,6 +201,202 @@ function WorldMap({ countries }) {
    MAIN DASHBOARD COMPONENT
    ══════════════════════════════════════════════════════════════════════════════ */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   BUSINESS INTELLIGENCE STRIP — Tenders, Patent Cliff, Para IV, News
+   ══════════════════════════════════════════════════════════════════════════ */
+const BIZ_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+function getBizCache(type) {
+  try {
+    const raw = localStorage.getItem(`raisa_bizdev_${type}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.ts > BIZ_CACHE_TTL) return null;
+    return parsed.data;
+  } catch { return null; }
+}
+function setBizCache(type, data) {
+  try { localStorage.setItem(`raisa_bizdev_${type}`, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+
+function IntelligenceStrip({ onNavigate }) {
+  const [tenders, setTenders] = useState(null);
+  const [patents, setPatents] = useState(null);
+  const [paraIv, setParaIv] = useState(null);
+  const [news, setNews] = useState(null);
+  const [loading, setLoading] = useState({ tenders:true, 'patent-cliff':true, 'para-iv':true, news:true });
+
+  const loadType = useCallback(async (type, setter) => {
+    const cached = getBizCache(type);
+    if (cached) {
+      setter(cached);
+      setLoading(p => ({ ...p, [type]: false }));
+      return;
+    }
+    try {
+      const res = await fetch('/api/business-intel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      });
+      const json = await res.json();
+      const data = json.data || [];
+      setBizCache(type, data);
+      setter(data);
+    } catch(e) { console.error(e); setter([]); }
+    setLoading(p => ({ ...p, [type]: false }));
+  }, []);
+
+  useEffect(() => {
+    loadType('tenders', setTenders);
+    loadType('patent-cliff', setPatents);
+    loadType('para-iv', setParaIv);
+    loadType('news', setNews);
+  }, [loadType]);
+
+  return (
+    <div style={{ marginBottom:24, display:'flex', flexDirection:'column', gap:16 }}>
+
+      {/* Tenders */}
+      <IntelSection
+        icon="📢" title="Tender Alerts" accent={T.mid} live count={tenders?.length}
+        loading={loading.tenders} onViewAll={() => onNavigate?.('bizdev')}>
+        {loading.tenders ? <IntelSkeleton/> : !tenders?.length ? <IntelEmpty text="No active tenders found right now"/> : (
+          <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:4 }}>
+            {tenders.slice(0,4).map((t,i) => {
+              const urgent = t.daysLeft != null && t.daysLeft <= 15;
+              return (
+                <div key={i} style={{ minWidth:220, background:T.light, borderRadius:10, padding:14,
+                  border:`1px solid ${T.border}`, borderLeft:`4px solid ${urgent ? T.red : T.mid}`, flexShrink:0 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:4,
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.title}</div>
+                  <div style={{ fontSize:10, color:T.muted, marginBottom:8 }}>{t.authority} · {t.country}</div>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <span style={{ fontSize:12, fontWeight:700, color:'#166534' }}>{t.value}</span>
+                    <span style={{ fontSize:10, fontWeight:600, color: urgent ? T.red : T.muted }}>
+                      {urgent ? '🔴' : '⏰'} {t.daysLeft != null ? `${t.daysLeft}d` : t.deadline}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </IntelSection>
+
+      {/* Patent Cliff */}
+      <IntelSection
+        icon="⏰" title="Patent Cliff Monitor" accent="#D97706" count={patents?.length}
+        loading={loading['patent-cliff']} onViewAll={() => onNavigate?.('bizdev')}>
+        {loading['patent-cliff'] ? <IntelSkeleton/> : !patents?.length ? <IntelEmpty text="No patent cliff data available"/> : (
+          <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:4 }}>
+            {patents.slice(0,4).map((p,i) => (
+              <div key={i} style={{ minWidth:200, background:'#FFFBEB', borderRadius:10, padding:14,
+                border:`1px solid ${T.amberBorder}`, borderLeft:'4px solid #D97706', flexShrink:0 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:T.text }}>💊 {p.brand}</div>
+                <div style={{ fontSize:10, color:T.muted, marginBottom:6 }}>{p.molecule}</div>
+                <div style={{ fontSize:10, color:T.text, marginBottom:8 }}>{p.originator}</div>
+                <div style={{ fontSize:11, fontWeight:700, color:'#D97706' }}>⏰ {p.expiryDate}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </IntelSection>
+
+      {/* Para IV */}
+      <IntelSection
+        icon="⚖️" title="Para IV Challenge Tracker" accent={T.red} count={paraIv?.length}
+        loading={loading['para-iv']} onViewAll={() => onNavigate?.('bizdev')}>
+        {loading['para-iv'] ? <IntelSkeleton/> : !paraIv?.length ? <IntelEmpty text="No active Para IV challenges found"/> : (
+          <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:4 }}>
+            {paraIv.slice(0,4).map((p,i) => {
+              const colorMap = { red:'#C50F1F', green:'#166534', amber:'#D97706' };
+              const c = colorMap[p.statusColor] || T.muted;
+              return (
+                <div key={i} style={{ minWidth:220, background:'#FFF5F5', borderRadius:10, padding:14,
+                  border:`1px solid ${T.redBorder}`, borderLeft:`4px solid ${c}`, flexShrink:0 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:T.text }}>💊 {p.brand}</div>
+                  <div style={{ fontSize:10, color:T.muted, marginBottom:6 }}>{p.molecule} · {p.challengers}</div>
+                  <div style={{ fontSize:10, fontWeight:600, color:c, padding:'3px 8px',
+                    background:c+'18', borderRadius:4, display:'inline-block' }}>{p.status}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </IntelSection>
+
+      {/* News */}
+      <IntelSection
+        icon="📰" title="Pharma Industry News" accent={T.mid} count={news?.length}
+        loading={loading.news} onViewAll={() => onNavigate?.('bizdev')}>
+        {loading.news ? <IntelSkeleton/> : !news?.length ? <IntelEmpty text="No recent news available"/> : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {news.slice(0,5).map((n,i) => {
+              const catColors = { BREAKING:'#C50F1F', APPROVAL:'#166534', REGULATORY:T.mid, MERGER:'#D97706', RECALL:'#C50F1F' };
+              const catIcons = { BREAKING:'🔴', APPROVAL:'🟢', REGULATORY:'📋', MERGER:'💰', RECALL:'⚠️' };
+              const c = catColors[n.category] || T.muted;
+              return (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
+                  background:T.light, borderRadius:8 }}>
+                  <span style={{ fontSize:9, fontWeight:800, color:c, background:c+'18', padding:'2px 7px',
+                    borderRadius:4, flexShrink:0, whiteSpace:'nowrap' }}>{catIcons[n.category]||'📰'} {n.category}</span>
+                  <span style={{ fontSize:12, color:T.text, flex:1, overflow:'hidden',
+                    textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{n.headline}</span>
+                  <span style={{ fontSize:10, color:T.dim, flexShrink:0 }}>{n.timeAgo}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </IntelSection>
+    </div>
+  );
+}
+
+function IntelSection({ icon, title, accent, count, live, loading, onViewAll, children }) {
+  return (
+    <div style={{ background:T.white, borderRadius:12, border:`1px solid ${T.border}`,
+      overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'14px 20px',
+        borderBottom:`1px solid ${T.border}`, borderLeft:`4px solid ${accent}` }}>
+        <span style={{ fontSize:18 }}>{icon}</span>
+        <span style={{ fontSize:15, fontWeight:800, color:T.navy }}>{title}</span>
+        {live && !loading && (
+          <span style={{ fontSize:9, fontWeight:700, color:'#fff', background:T.red,
+            padding:'2px 8px', borderRadius:10, display:'flex', alignItems:'center', gap:3 }}>
+            <span style={{ width:5, height:5, borderRadius:'50%', background:'#fff' }}/> LIVE
+          </span>
+        )}
+        {count != null && (
+          <span style={{ fontSize:10, color:T.muted, background:T.bg, padding:'2px 8px', borderRadius:10 }}>{count}</span>
+        )}
+        <button onClick={onViewAll}
+          style={{ marginLeft:'auto', fontSize:11, fontWeight:600, color:accent, background:'none',
+            border:'none', cursor:'pointer', fontFamily:'inherit' }}>
+          View All →
+        </button>
+      </div>
+      <div style={{ padding:'16px 20px' }}>{children}</div>
+    </div>
+  );
+}
+
+function IntelSkeleton() {
+  return (
+    <div style={{ display:'flex', gap:12 }}>
+      {[1,2,3].map(i => (
+        <div key={i} style={{ minWidth:200, height:76, background:T.bg, borderRadius:10,
+          animation:'pulse 1.5s ease-in-out infinite' }}/>
+      ))}
+      <style>{`@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}`}</style>
+    </div>
+  );
+}
+
+function IntelEmpty({ text }) {
+  return <div style={{ fontSize:12, color:T.dim, padding:'8px 0', fontStyle:'italic' }}>{text}</div>;
+}
+
 export default function Dashboard({ onNavigate }) {
   const [summary, setSummary]     = useState(null);
   const [dossiers, setDossiers]   = useState([]);
@@ -327,6 +523,9 @@ export default function Dashboard({ onNavigate }) {
           ↻ Refresh
         </button>
       </div>
+
+      {/* ── BUSINESS INTELLIGENCE STRIP — Tenders, Patent Cliff, Para IV, News ── */}
+      <IntelligenceStrip onNavigate={onNavigate} />
 
       {/* ── WELCOME — always visible ─────────────────────────────────────── */}
       <div style={{ background:T.white, borderRadius:12,

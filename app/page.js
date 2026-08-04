@@ -17,6 +17,11 @@ const DocumentReview = dynamic(
   { ssr: false, loading: () => <Loader text="Loading Document Review..." /> }
 );
 
+const BusinessDev = dynamic(
+  () => import('../components/BusinessDev'),
+  { ssr: false, loading: () => <Loader text="Loading Business Development..." /> }
+);
+
 const IndiaRegulatory = dynamic(
   () => import('../components/IndiaRegulatory').then(m => ({ default: m.IndiaRegulatoryApp })),
   { ssr: false, loading: () => <Loader text="Loading India Regulatory..." /> }
@@ -47,6 +52,7 @@ const TABS = [
   { id:'checklist', label:'Checklist',          icon:'✓'  },
   { id:'review',    label:'Document Review',    icon:'📋' },
   { id:'india',     label:'India Regulatory',   icon:'🇮🇳' },
+  { id:'bizdev',    label:'Business Dev',       icon:'📢' },
 ];
 
 export default function Home() {
@@ -78,6 +84,11 @@ export default function Home() {
     // Full-window Document Review — hides everything else
     if (activeTab === 'review') {
       return <DocumentReview onBack={() => setActiveTab('dashboard')} />;
+    }
+
+    // Full-window Business Development — hides everything else
+    if (activeTab === 'bizdev') {
+      return <BusinessDev onBack={() => setActiveTab('dashboard')} />;
     }
 
     return (

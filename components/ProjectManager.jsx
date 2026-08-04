@@ -1340,10 +1340,10 @@ Return ONLY the JSON array, no markdown, no backticks. If no cross-references ar
                 mn_all.forEach(n => { if (n.section) allNodeBySection[n.section] = n; });
 
                 /* For NE sections, show original section label + metadata */
-                const productINN = activeDossier?.inn || activeDossier?.product_name || '';
+                const productINN = activeDossier?.product_inn || activeDossier?.inn || '';
                 const productMfr = activeDossier?.api_manufacturer || activeDossier?.applicant || '';
-                const productDF = activeDossier?.dosage_form || '';
-                const productStrength = activeDossier?.strength || '';
+                const productDF = activeDossier?.product_dosage_form || activeDossier?.dosage_form || '';
+                const productStrength = activeDossier?.product_strength || activeDossier?.strength || '';
                 const dsMeta = productINN ? `(${productINN}${productMfr ? ', ' + productMfr : ''})` : '';
                 const dpMeta = productINN ? `(${productINN}${productDF ? ', ' + productDF : ''}${productStrength ? ' ' + productStrength : ''})` : '';
 
