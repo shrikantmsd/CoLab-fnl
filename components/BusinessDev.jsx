@@ -15,10 +15,14 @@ function getCached(type) {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Date.now() - parsed.ts > CACHE_TTL) return null;
+    // Never reuse a cached empty result — treat it as a cache miss so the
+    // next load retries instead of staying blank for the full TTL window.
+    if (!Array.isArray(parsed.data) || parsed.data.length === 0) return null;
     return parsed.data;
   } catch { return null; }
 }
 function setCached(type, data) {
+  if (!Array.isArray(data) || data.length === 0) return; // don't cache failures/empties
   try { localStorage.setItem(`raisa_bizdev_${type}`, JSON.stringify({ data, ts: Date.now() })); } catch {}
 }
 
@@ -35,7 +39,7 @@ async function fetchIntel(type, force = false) {
   const json = await res.json();
   const data = json.data || [];
   setCached(type, data);
-  return { data, cached: false };
+  return { data, cached: false, error: json.error };
 }
 
 const TAB_CONFIG = [
@@ -50,15 +54,20 @@ export default function BusinessDev({ onBack }) {
   const [data, setData] = useState({ tenders:[], 'patent-cliff':[], 'para-iv':[], news:[] });
   const [loading, setLoading] = useState({});
   const [fetchedAt, setFetchedAt] = useState({});
+  const [errors, setErrors] = useState({});
   const [search, setSearch] = useState('');
 
   const load = useCallback(async (type, force = false) => {
     setLoading(p => ({ ...p, [type]: true }));
     try {
-      const { data: result, cached } = await fetchIntel(type, force);
+      const { data: result, cached, error } = await fetchIntel(type, force);
       setData(p => ({ ...p, [type]: result }));
+      setErrors(p => ({ ...p, [type]: result.length === 0 ? (error || 'No current matches found') : null }));
       setFetchedAt(p => ({ ...p, [type]: cached ? 'cached' : new Date().toLocaleTimeString() }));
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      console.error(e);
+      setErrors(p => ({ ...p, [type]: 'Request failed: ' + e.message }));
+    }
     setLoading(p => ({ ...p, [type]: false }));
   }, []);
 
@@ -132,8 +141,13 @@ export default function BusinessDev({ onBack }) {
         ) : items.length === 0 ? (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%',
             flexDirection:'column', gap:12, color:T.muted }}>
-            <div style={{ fontSize:48 }}>🔍</div>
-            <div style={{ fontSize:14 }}>No results found. Try refreshing.</div>
+            <div style={{ fontSize:48 }}>⚠️</div>
+            <div style={{ fontSize:14, fontWeight:600 }}>{errors[activeTab] || 'No results found'}</div>
+            <button onClick={() => load(activeTab, true)}
+              style={{ padding:'8px 20px', background:T.navy, color:'#fff', border:'none',
+                borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+              ↻ Try Again
+            </button>
           </div>
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:16 }}>
@@ -165,6 +179,7 @@ function TenderCard({ t }) {
           {urgent ? '🔴' : '⏰'} {t.daysLeft != null ? `${t.daysLeft}d left` : t.deadline}
         </span>
       </div>
+      {t.postedAgo && <div style={{ fontSize:9, color:T.dim, marginTop:6 }}>Posted {t.postedAgo}</div>}
     </div>
   );
 }
@@ -182,6 +197,7 @@ function PatentCard({ t }) {
         <span style={{ fontSize:12, fontWeight:700, color:T.green }}>{t.annualSales}</span>
         <span style={{ fontSize:11, fontWeight:700, color:T.amber }}>⏰ {t.expiryDate}</span>
       </div>
+      {t.dataAsOf && <div style={{ fontSize:9, color:T.dim, marginTop:6 }}>{t.dataAsOf}</div>}
     </div>
   );
 }
@@ -200,6 +216,7 @@ function ParaIVCard({ t }) {
       <div style={{ marginTop:8, padding:'6px 10px', background: c+'18', borderRadius:6 }}>
         <span style={{ fontSize:11, fontWeight:600, color:c }}>{t.status}</span>
       </div>
+      {t.dataAsOf && <div style={{ fontSize:9, color:T.dim, marginTop:8 }}>{t.dataAsOf}</div>}
     </div>
   );
 }
