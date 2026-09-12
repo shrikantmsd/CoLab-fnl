@@ -39,7 +39,7 @@ async function fetchIntel(type, force = false) {
   const json = await res.json();
   const data = json.data || [];
   setCached(type, data);
-  return { data, cached: false, error: json.error };
+  return { data, cached: false, error: json.error, errorDetail: json.errorDetail };
 }
 
 const TAB_CONFIG = [
@@ -60,9 +60,10 @@ export default function BusinessDev({ onBack }) {
   const load = useCallback(async (type, force = false) => {
     setLoading(p => ({ ...p, [type]: true }));
     try {
-      const { data: result, cached, error } = await fetchIntel(type, force);
+      const { data: result, cached, error, errorDetail } = await fetchIntel(type, force);
       setData(p => ({ ...p, [type]: result }));
-      setErrors(p => ({ ...p, [type]: result.length === 0 ? (error || 'No current matches found') : null }));
+      const combinedError = error ? (errorDetail ? `${error} — ${errorDetail}` : error) : 'No current matches found';
+      setErrors(p => ({ ...p, [type]: result.length === 0 ? combinedError : null }));
       setFetchedAt(p => ({ ...p, [type]: cached ? 'cached' : new Date().toLocaleTimeString() }));
     } catch(e) {
       console.error(e);
@@ -139,16 +140,28 @@ export default function BusinessDev({ onBack }) {
             <div style={{ fontSize:14 }}>Searching live sources for {TAB_CONFIG.find(t=>t.id===activeTab)?.label}...</div>
           </div>
         ) : items.length === 0 ? (
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%',
-            flexDirection:'column', gap:12, color:T.muted }}>
-            <div style={{ fontSize:48 }}>⚠️</div>
-            <div style={{ fontSize:14, fontWeight:600 }}>{errors[activeTab] || 'No results found'}</div>
-            <button onClick={() => load(activeTab, true)}
-              style={{ padding:'8px 20px', background:T.navy, color:'#fff', border:'none',
-                borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
-              ↻ Try Again
-            </button>
-          </div>
+          (() => {
+            const [summary, detail] = (errors[activeTab] || 'No results found').split(' — ');
+            return (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%',
+                flexDirection:'column', gap:12, color:T.muted }}>
+                <div style={{ fontSize:48 }}>⚠️</div>
+                <div style={{ fontSize:14, fontWeight:600 }}>{summary}</div>
+                {detail && (
+                  <div style={{ fontSize:11, color:'#B45309', background:'#FFFBEB', border:'1px solid #FDE68A',
+                    borderRadius:6, padding:'8px 14px', fontFamily:'monospace', maxWidth:600,
+                    wordBreak:'break-word', textAlign:'center' }}>
+                    {detail}
+                  </div>
+                )}
+                <button onClick={() => load(activeTab, true)}
+                  style={{ padding:'8px 20px', background:T.navy, color:'#fff', border:'none',
+                    borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                  ↻ Try Again
+                </button>
+              </div>
+            );
+          })()
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:16 }}>
             {activeTab === 'tenders' && items.map((t, i) => <TenderCard key={i} t={t}/>)}

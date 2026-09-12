@@ -252,7 +252,10 @@ function IntelligenceStrip({ onNavigate }) {
       const data = json.data || [];
       setBizCache(type, data);
       setter(data);
-      setErrors(p => ({ ...p, [type]: data.length === 0 ? (json.error || 'No current matches found') : null }));
+      const combinedError = json.error
+        ? (json.errorDetail ? `${json.error} — ${json.errorDetail}` : json.error)
+        : 'No current matches found';
+      setErrors(p => ({ ...p, [type]: data.length === 0 ? combinedError : null }));
     } catch(e) {
       console.error(e);
       setter([]);
@@ -428,9 +431,19 @@ function IntelSkeleton() {
 }
 
 function IntelEmpty({ text }) {
+  const [summary, detail] = (text || '').split(' — ');
   return (
-    <div style={{ fontSize:12, color:T.dim, padding:'8px 0', display:'flex', alignItems:'center', gap:6 }}>
-      <span>⚠️</span><span style={{ fontStyle:'italic' }}>{text}</span>
+    <div style={{ padding:'8px 0' }}>
+      <div style={{ fontSize:12, color:T.dim, display:'flex', alignItems:'center', gap:6 }}>
+        <span>⚠️</span><span style={{ fontStyle:'italic' }}>{summary}</span>
+      </div>
+      {detail && (
+        <div style={{ fontSize:10, color:'#B45309', background:'#FFFBEB', border:'1px solid #FDE68A',
+          borderRadius:5, padding:'6px 10px', marginTop:6, marginLeft:20, fontFamily:'monospace',
+          wordBreak:'break-word', maxWidth:600 }}>
+          {detail}
+        </div>
+      )}
     </div>
   );
 }
