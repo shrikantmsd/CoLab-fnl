@@ -203,63 +203,29 @@ function WorldMap({ countries }) {
 
 /* ══════════════════════════════════════════════════════════════════════════
    BUSINESS INTELLIGENCE STRIP — Tenders, Patent Cliff, Para IV, News
+   Reads from the shared Supabase store only. Never calls Anthropic —
+   that only happens when an admin clicks "Update Now" in Business Dev,
+   or via the automatic weekly job. This is a free, unlimited-frequency
+   database read for every user, every page view.
    ══════════════════════════════════════════════════════════════════════════ */
-const BIZ_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
-
-function getBizCache(type) {
-  try {
-    const raw = localStorage.getItem(`raisa_bizdev_${type}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.ts > BIZ_CACHE_TTL) return null;
-    // An empty cached result is treated as "no cache" so a bad/empty fetch
-    // never blocks a retry on the next page load.
-    if (!Array.isArray(parsed.data) || parsed.data.length === 0) return null;
-    return parsed.data;
-  } catch { return null; }
-}
-function setBizCache(type, data) {
-  // Only cache genuine, non-empty results — never lock in a failed/empty fetch.
-  if (!Array.isArray(data) || data.length === 0) return;
-  try { localStorage.setItem(`raisa_bizdev_${type}`, JSON.stringify({ data, ts: Date.now() })); } catch {}
-}
-
 function IntelligenceStrip({ onNavigate }) {
   const [tenders, setTenders] = useState(null);
   const [patents, setPatents] = useState(null);
   const [paraIv, setParaIv] = useState(null);
   const [news, setNews] = useState(null);
-  const [errors, setErrors] = useState({});
+  const [lastUpdate, setLastUpdate] = useState({});
   const [loading, setLoading] = useState({ tenders:true, 'patent-cliff':true, 'para-iv':true, news:true });
 
-  const loadType = useCallback(async (type, setter, force = false) => {
-    if (!force) {
-      const cached = getBizCache(type);
-      if (cached) {
-        setter(cached);
-        setErrors(p => ({ ...p, [type]: null }));
-        setLoading(p => ({ ...p, [type]: false }));
-        return;
-      }
-    }
+  const loadType = useCallback(async (type, setter) => {
     setLoading(p => ({ ...p, [type]: true }));
     try {
-      const res = await fetch('/api/business-intel', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
-      });
+      const res = await fetch(`/api/business-intel/data?category=${type}`);
       const json = await res.json();
-      const data = json.data || [];
-      setBizCache(type, data);
-      setter(data);
-      const combinedError = json.error
-        ? (json.errorDetail ? `${json.error} — ${json.errorDetail}` : json.error)
-        : 'No current matches found';
-      setErrors(p => ({ ...p, [type]: data.length === 0 ? combinedError : null }));
+      setter(json.items || []);
+      setLastUpdate(p => ({ ...p, [type]: json.lastAiUpdate || json.lastManualUpdate || null }));
     } catch(e) {
       console.error(e);
       setter([]);
-      setErrors(p => ({ ...p, [type]: 'Request failed: ' + e.message }));
     }
     setLoading(p => ({ ...p, [type]: false }));
   }, []);
@@ -276,15 +242,16 @@ function IntelligenceStrip({ onNavigate }) {
 
       {/* Tenders */}
       <IntelSection
-        icon="📢" title="Tender Alerts" accent={T.mid} live count={tenders?.length}
+        icon="📢" title="Tender Alerts" accent={T.mid} count={tenders?.length}
+        lastUpdate={lastUpdate.tenders}
         loading={loading.tenders} onViewAll={() => onNavigate?.('bizdev')}
-        onRefresh={() => loadType('tenders', setTenders, true)}>
-        {loading.tenders ? <IntelSkeleton/> : !tenders?.length ? <IntelEmpty text={errors.tenders || 'No active tenders found right now'}/> : (
+        onRefresh={() => loadType('tenders', setTenders)}>
+        {loading.tenders ? <IntelSkeleton/> : !tenders?.length ? <IntelEmpty category="tenders" onViewAll={() => onNavigate?.('bizdev')}/> : (
           <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:4 }}>
             {tenders.slice(0,4).map((t,i) => {
               const urgent = t.daysLeft != null && t.daysLeft <= 15;
               return (
-                <div key={i} style={{ minWidth:220, background:T.light, borderRadius:10, padding:14,
+                <div key={t.id || i} style={{ minWidth:220, background:T.light, borderRadius:10, padding:14,
                   border:`1px solid ${T.border}`, borderLeft:`4px solid ${urgent ? T.red : T.mid}`, flexShrink:0 }}>
                   <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:4,
                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.title}</div>
@@ -295,11 +262,10 @@ function IntelligenceStrip({ onNavigate }) {
                       {urgent ? '🔴' : '⏰'} {t.daysLeft != null ? `${t.daysLeft}d left` : t.deadline}
                     </span>
                   </div>
-                  {t.postedDaysAgo != null && (
-                    <div style={{ fontSize:9, color:T.dim, marginTop:4 }}>
-                      Posted {t.postedDaysAgo === 0 ? 'today' : `${t.postedDaysAgo}d ago`}
-                    </div>
+                  {t.postedAgo && (
+                    <div style={{ fontSize:9, color:T.dim, marginTop:4 }}>Posted {t.postedAgo}</div>
                   )}
+                  {t._origin === 'manual' && <SourceTag source="manual"/>}
                 </div>
               );
             })}
@@ -310,17 +276,19 @@ function IntelligenceStrip({ onNavigate }) {
       {/* Patent Cliff */}
       <IntelSection
         icon="⏰" title="Patent Cliff Monitor" accent="#D97706" count={patents?.length}
+        lastUpdate={lastUpdate['patent-cliff']}
         loading={loading['patent-cliff']} onViewAll={() => onNavigate?.('bizdev')}
-        onRefresh={() => loadType('patent-cliff', setPatents, true)}>
-        {loading['patent-cliff'] ? <IntelSkeleton/> : !patents?.length ? <IntelEmpty text={errors['patent-cliff'] || 'No patent cliff data available'}/> : (
+        onRefresh={() => loadType('patent-cliff', setPatents)}>
+        {loading['patent-cliff'] ? <IntelSkeleton/> : !patents?.length ? <IntelEmpty category="patent-cliff" onViewAll={() => onNavigate?.('bizdev')}/> : (
           <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:4 }}>
             {patents.slice(0,4).map((p,i) => (
-              <div key={i} style={{ minWidth:200, background:'#FFFBEB', borderRadius:10, padding:14,
+              <div key={p.id || i} style={{ minWidth:200, background:'#FFFBEB', borderRadius:10, padding:14,
                 border:`1px solid ${T.amberBorder}`, borderLeft:'4px solid #D97706', flexShrink:0 }}>
                 <div style={{ fontSize:12, fontWeight:700, color:T.text }}>💊 {p.brand}</div>
                 <div style={{ fontSize:10, color:T.muted, marginBottom:6 }}>{p.molecule}</div>
                 <div style={{ fontSize:10, color:T.text, marginBottom:8 }}>{p.originator}</div>
                 <div style={{ fontSize:11, fontWeight:700, color:'#D97706' }}>⏰ {p.expiryDate}</div>
+                {p._origin === 'manual' && <SourceTag source="manual"/>}
               </div>
             ))}
           </div>
@@ -330,21 +298,23 @@ function IntelligenceStrip({ onNavigate }) {
       {/* Para IV */}
       <IntelSection
         icon="⚖️" title="Para IV Challenge Tracker" accent={T.red} count={paraIv?.length}
+        lastUpdate={lastUpdate['para-iv']}
         loading={loading['para-iv']} onViewAll={() => onNavigate?.('bizdev')}
-        onRefresh={() => loadType('para-iv', setParaIv, true)}>
-        {loading['para-iv'] ? <IntelSkeleton/> : !paraIv?.length ? <IntelEmpty text={errors['para-iv'] || 'No active Para IV challenges found'}/> : (
+        onRefresh={() => loadType('para-iv', setParaIv)}>
+        {loading['para-iv'] ? <IntelSkeleton/> : !paraIv?.length ? <IntelEmpty category="para-iv" onViewAll={() => onNavigate?.('bizdev')}/> : (
           <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:4 }}>
             {paraIv.slice(0,4).map((p,i) => {
               const colorMap = { red:'#C50F1F', green:'#166534', amber:'#D97706' };
               const c = colorMap[p.statusColor] || T.muted;
               return (
-                <div key={i} style={{ minWidth:220, background:'#FFF5F5', borderRadius:10, padding:14,
+                <div key={p.id || i} style={{ minWidth:220, background:'#FFF5F5', borderRadius:10, padding:14,
                   border:`1px solid ${T.redBorder}`, borderLeft:`4px solid ${c}`, flexShrink:0 }}>
                   <div style={{ fontSize:12, fontWeight:700, color:T.text }}>💊 {p.brand}</div>
                   <div style={{ fontSize:10, color:T.muted, marginBottom:6 }}>{p.molecule} · {p.challengers}</div>
                   <div style={{ fontSize:10, fontWeight:600, color:c, padding:'3px 8px',
                     background:c+'18', borderRadius:4, display:'inline-block' }}>{p.status}</div>
-                  {p.asOf && <div style={{ fontSize:9, color:T.dim, marginTop:6 }}>As of {p.asOf}</div>}
+                  {p.dataAsOf && <div style={{ fontSize:9, color:T.dim, marginTop:6 }}>{p.dataAsOf}</div>}
+                  {p._origin === 'manual' && <SourceTag source="manual"/>}
                 </div>
               );
             })}
@@ -355,22 +325,24 @@ function IntelligenceStrip({ onNavigate }) {
       {/* News */}
       <IntelSection
         icon="📰" title="Pharma Industry News" accent={T.mid} count={news?.length}
+        lastUpdate={lastUpdate.news}
         loading={loading.news} onViewAll={() => onNavigate?.('bizdev')}
-        onRefresh={() => loadType('news', setNews, true)}>
-        {loading.news ? <IntelSkeleton/> : !news?.length ? <IntelEmpty text={errors.news || 'No recent news available'}/> : (
+        onRefresh={() => loadType('news', setNews)}>
+        {loading.news ? <IntelSkeleton/> : !news?.length ? <IntelEmpty category="news" onViewAll={() => onNavigate?.('bizdev')}/> : (
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {news.slice(0,5).map((n,i) => {
               const catColors = { BREAKING:'#C50F1F', APPROVAL:'#166534', REGULATORY:T.mid, MERGER:'#D97706', RECALL:'#C50F1F' };
               const catIcons = { BREAKING:'🔴', APPROVAL:'🟢', REGULATORY:'📋', MERGER:'💰', RECALL:'⚠️' };
               const c = catColors[n.category] || T.muted;
               return (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
+                <div key={n.id || i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
                   background:T.light, borderRadius:8 }}>
                   <span style={{ fontSize:9, fontWeight:800, color:c, background:c+'18', padding:'2px 7px',
                     borderRadius:4, flexShrink:0, whiteSpace:'nowrap' }}>{catIcons[n.category]||'📰'} {n.category}</span>
                   <span style={{ fontSize:12, color:T.text, flex:1, overflow:'hidden',
                     textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{n.headline}</span>
                   <span style={{ fontSize:10, color:T.dim, flexShrink:0 }}>{n.timeAgo}</span>
+                  {n._origin === 'manual' && <SourceTag source="manual"/>}
                 </div>
               );
             })}
@@ -381,7 +353,31 @@ function IntelligenceStrip({ onNavigate }) {
   );
 }
 
-function IntelSection({ icon, title, accent, count, live, loading, onViewAll, onRefresh, children }) {
+// Turns a Supabase timestamp into a short, human "Updated X ago" string.
+function formatAgo(iso) {
+  if (!iso) return null;
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 60) return mins <= 1 ? 'Updated just now' : `Updated ${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Updated ${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `Updated ${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  return `Updated ${weeks}w ago`;
+}
+
+function SourceTag({ source }) {
+  return (
+    <div style={{ fontSize:8, fontWeight:700, color:'#7C3AED', background:'#F5F0FF',
+      padding:'1px 6px', borderRadius:3, marginTop:6, display:'inline-block' }}>
+      ✍️ MANUAL
+    </div>
+  );
+}
+
+function IntelSection({ icon, title, accent, count, lastUpdate, loading, onViewAll, onRefresh, children }) {
+  const agoText = formatAgo(lastUpdate);
   return (
     <div style={{ background:T.white, borderRadius:12, border:`1px solid ${T.border}`,
       overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -389,18 +385,15 @@ function IntelSection({ icon, title, accent, count, live, loading, onViewAll, on
         borderBottom:`1px solid ${T.border}`, borderLeft:`4px solid ${accent}` }}>
         <span style={{ fontSize:18 }}>{icon}</span>
         <span style={{ fontSize:15, fontWeight:800, color:T.navy }}>{title}</span>
-        {live && !loading && (
-          <span style={{ fontSize:9, fontWeight:700, color:'#fff', background:T.red,
-            padding:'2px 8px', borderRadius:10, display:'flex', alignItems:'center', gap:3 }}>
-            <span style={{ width:5, height:5, borderRadius:'50%', background:'#fff' }}/> LIVE
-          </span>
-        )}
         {count != null && (
           <span style={{ fontSize:10, color:T.muted, background:T.bg, padding:'2px 8px', borderRadius:10 }}>{count}</span>
         )}
+        {agoText && !loading && (
+          <span style={{ fontSize:10, color:T.dim }}>{agoText}</span>
+        )}
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:14 }}>
           {onRefresh && (
-            <button onClick={onRefresh} disabled={loading} title="Refresh this section"
+            <button onClick={onRefresh} disabled={loading} title="Re-check for updates"
               style={{ fontSize:11, color:T.muted, background:'none', border:'none',
                 cursor: loading ? 'wait' : 'pointer', fontFamily:'inherit' }}>
               {loading ? '⟳' : '↻'}
@@ -430,20 +423,17 @@ function IntelSkeleton() {
   );
 }
 
-function IntelEmpty({ text }) {
-  const [summary, detail] = (text || '').split(' — ');
+function IntelEmpty({ category, onViewAll }) {
   return (
-    <div style={{ padding:'8px 0' }}>
+    <div style={{ padding:'8px 0', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
       <div style={{ fontSize:12, color:T.dim, display:'flex', alignItems:'center', gap:6 }}>
-        <span>⚠️</span><span style={{ fontStyle:'italic' }}>{summary}</span>
+        <span>ℹ️</span><span style={{ fontStyle:'italic' }}>No data yet — the admin can update this from Business Dev</span>
       </div>
-      {detail && (
-        <div style={{ fontSize:10, color:'#B45309', background:'#FFFBEB', border:'1px solid #FDE68A',
-          borderRadius:5, padding:'6px 10px', marginTop:6, marginLeft:20, fontFamily:'monospace',
-          wordBreak:'break-word', maxWidth:600 }}>
-          {detail}
-        </div>
-      )}
+      <button onClick={onViewAll}
+        style={{ fontSize:11, color:T.mid, background:'none', border:'none', cursor:'pointer',
+          fontFamily:'inherit', flexShrink:0, whiteSpace:'nowrap' }}>
+        Go to Business Dev →
+      </button>
     </div>
   );
 }
