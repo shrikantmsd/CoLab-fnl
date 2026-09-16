@@ -28,8 +28,10 @@ const CMD_SECTIONS = [
   ]},
   { id:'licences', title:'C. Licences & Permits', icon:'📜', fields:[
     { key:'mfg_licence', label:'Manufacturing Licence (Form 25/28)', type:'text', placeholder:'e.g. MFG/MH/2024/001234' },
+    { key:'mfg_licence_expiry', label:'Manufacturing Licence — Expiry Date', type:'date' },
     { key:'drug_licence', label:'Drug Licence (Form 20-B / 21-B)', type:'text', placeholder:'e.g. DL/MH/2024/005678' },
     { key:'who_gmp', label:'WHO-GMP Certificate No. & Validity', type:'text', placeholder:'e.g. WHO-GMP/2024/1234 valid till 31-Dec-2026' },
+    { key:'who_gmp_expiry', label:'WHO-GMP Certificate — Expiry Date', type:'date' },
     { key:'eu_gmp', label:'EU GMP / US FDA Establishment', type:'text', placeholder:'EU MIA number or US FEI number...' },
     { key:'copp', label:'COPP Certificate Details', type:'text', placeholder:'COPP ref, issuing CDSCO office, validity...' },
     { key:'state_fda', label:'State FDA Approvals', type:'text', placeholder:'State licence details...' },
@@ -825,6 +827,11 @@ Return ONLY the JSON, no markdown, no backticks.` }],
                                 style={{ width:'100%', padding:'7px 10px', border:`1px solid ${T.border}`,
                                   borderRadius:5, fontSize:11, fontFamily:'inherit', resize:'vertical',
                                   boxSizing:'border-box', lineHeight:1.6 }}/>
+                            ) : f.type === 'date' ? (
+                              <input type="date" value={cmdForm[f.key] || ''}
+                                onChange={e => setCmdForm(p => ({ ...p, [f.key]: e.target.value }))}
+                                style={{ width:'100%', padding:'7px 10px', border:`1px solid ${T.border}`,
+                                  borderRadius:5, fontSize:11, fontFamily:'inherit', boxSizing:'border-box' }}/>
                             ) : (
                               <input value={cmdForm[f.key] || ''} placeholder={f.placeholder}
                                 onChange={e => setCmdForm(p => ({ ...p, [f.key]: e.target.value }))}

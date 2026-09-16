@@ -27,6 +27,11 @@ const IndiaRegulatory = dynamic(
   { ssr: false, loading: () => <Loader text="Loading India Regulatory..." /> }
 );
 
+const AssistantBot = dynamic(
+  () => import('../components/AssistantBot'),
+  { ssr: false }
+);
+
 const ProjectManager = dynamic(
   () => import('../components/ProjectManager'),
   { ssr: false, loading: () => <Loader text="Loading Project Manager..." /> }
@@ -93,6 +98,8 @@ export default function Home() {
 
     return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden' }}>
+
+      <AssistantBot onNavigate={setActiveTab} />
 
       {/* ── Top navigation bar ── */}
       <div style={{ background:'#1A3D6B', display:'flex', alignItems:'center',

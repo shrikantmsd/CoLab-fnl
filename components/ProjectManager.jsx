@@ -369,6 +369,8 @@ export default function ProjectManager({ userId = 'user_default' }) {
   const [dossierError, setDossierError] = useState(null);
   const [showGapModal, setShowGapModal] = useState(false);
   const [showLinksModal, setShowLinksModal] = useState(false);
+  const [showComplianceModal, setShowComplianceModal] = useState(false);
+  const [complianceForm, setComplianceForm] = useState({ annual_filing_due:'', registration_renewal_due:'' });
   const [hyperlinks, setHyperlinks] = useState([]);  // {id, source_section, target_section, source_text, type:'auto'|'manual'}
   const [addLinkForm, setAddLinkForm] = useState(null); // {source_section, target_section}
   const [nodeExtForm, setNodeExtForm] = useState(null); // {parentSection, parentModule}
@@ -383,6 +385,24 @@ export default function ProjectManager({ userId = 'user_default' }) {
     const res = await fetch(path, opts);
     return res.json();
   }, []);
+
+  // ── Compliance dates: save edits, or advance a cycle from its current anchor ──
+  async function saveComplianceDates(fields) {
+    if (!activeDossier?.id) return;
+    const { data } = await api('/api/projects', 'PATCH', { type: 'dossiers', id: activeDossier.id, ...fields });
+    if (data) {
+      setActiveDossier(prev => ({ ...prev, ...fields }));
+      setDossiers(prev => prev.map(d => d.id === activeDossier.id ? { ...d, ...fields } : d));
+    }
+  }
+
+  function advanceCycle(field, years) {
+    const current = complianceForm[field] ? new Date(complianceForm[field]) : new Date();
+    current.setFullYear(current.getFullYear() + years);
+    const next = current.toISOString().slice(0, 10);
+    setComplianceForm(prev => ({ ...prev, [field]: next }));
+    saveComplianceDates({ [field]: next });
+  }
 
   // ── Load projects ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1152,6 +1172,28 @@ Return ONLY the JSON array, no markdown, no backticks. If no cross-references ar
                   minWidth:14, textAlign:'center' }}>{hyperlinks.length}</span>
               )}
             </button>
+            <button onClick={() => {
+              setComplianceForm({
+                annual_filing_due: activeDossier?.annual_filing_due || '',
+                registration_renewal_due: activeDossier?.registration_renewal_due || '',
+              });
+              setShowComplianceModal(true);
+            }}
+              style={{ background: '#B45309', color: '#fff', border: 'none',
+                borderRadius: '6px', padding: '7px 16px', fontSize: '13px', fontWeight: 600,
+                cursor: 'pointer', position: 'relative' }}>
+              📅 Compliance
+              {(() => {
+                const soon = [activeDossier?.annual_filing_due, activeDossier?.registration_renewal_due]
+                  .filter(Boolean)
+                  .some(d => (new Date(d) - new Date()) / 86400000 < 60);
+                return soon ? (
+                  <span style={{ position:'absolute', top:-6, right:-6, background:'#EF4444',
+                    color:'#fff', fontSize:9, fontWeight:800, padding:'1px 5px', borderRadius:10,
+                    minWidth:14, textAlign:'center' }}>!</span>
+                ) : null;
+              })()}
+            </button>
             </div>
 
             {/* Sequence tabs row */}
@@ -1881,6 +1923,52 @@ Return ONLY the JSON array, no markdown, no backticks. If no cross-references ar
               ))}
             </div>
           )}
+        </Modal>
+      )}
+
+      {/* Compliance Dates Modal */}
+      {showComplianceModal && (
+        <Modal title="📅 Compliance Dates" onClose={() => setShowComplianceModal(false)} width={480}>
+          <div style={{ fontSize:12, color:T.muted, marginBottom:14, lineHeight:1.6 }}>
+            Auto-calculated when this dossier was created. Edit directly if the real deadline
+            differs, or click "Mark filed / renewed" once you've actually submitted — either way,
+            the date you leave here becomes the anchor for the next cycle.
+          </div>
+
+          {[
+            { key:'annual_filing_due', label:'Annual Report Filing', years:1, action:'✓ Mark filed (advance +1 year)' },
+            { key:'registration_renewal_due', label:'Registration Renewal', years:5, action:'✓ Mark renewed (advance +5 years)' },
+          ].map(f => {
+            const val = complianceForm[f.key];
+            const daysLeft = val ? Math.round((new Date(val) - new Date()) / 86400000) : null;
+            const urgent = daysLeft != null && daysLeft < 60;
+            return (
+              <div key={f.key} style={{ marginBottom:16, paddingBottom:16, borderBottom:`1px solid ${T.border}` }}>
+                <label style={{ fontSize:11, fontWeight:700, color:T.text, display:'block', marginBottom:6 }}>
+                  {f.label}
+                  {urgent && (
+                    <span style={{ marginLeft:8, fontSize:9, fontWeight:800, color:'#fff',
+                      background: daysLeft < 0 ? '#DC2626' : '#D97706', padding:'2px 7px', borderRadius:10 }}>
+                      {daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d left`}
+                    </span>
+                  )}
+                </label>
+                <div style={{ display:'flex', gap:8 }}>
+                  <input type="date" value={val || ''}
+                    onChange={e => setComplianceForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    onBlur={() => saveComplianceDates({ [f.key]: complianceForm[f.key] })}
+                    style={{ flex:1, padding:'7px 10px', border:`1px solid ${T.border}`,
+                      borderRadius:5, fontSize:12, fontFamily:'inherit' }}/>
+                  <button onClick={() => advanceCycle(f.key, f.years)}
+                    style={{ padding:'7px 12px', background:'#EEF3FB', color:T.accent,
+                      border:`1px solid #BFD3EF`, borderRadius:5, fontSize:11, fontWeight:600,
+                      cursor:'pointer', whiteSpace:'nowrap' }}>
+                    {f.action}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </Modal>
       )}
       {modal === 'project' && (

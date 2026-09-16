@@ -12,6 +12,7 @@ const TAB_CONFIG = [
   { id:'patent-cliff', label:'⏰ Patent Cliff', color:T.amber },
   { id:'para-iv', label:'⚖️ Para IV', color:T.red },
   { id:'news', label:'📰 Industry News', color:T.accent },
+  { id:'guidelines', label:'📘 Guidelines', color:T.purple },
 ];
 
 // Field definitions for the "+ Add Manually" form, per category.
@@ -51,6 +52,14 @@ const FORM_FIELDS = {
     { key:'timeAgo', label:'When (e.g. "3 days ago", "Today")' },
     { key:'url', label:'Source URL' },
   ],
+  guidelines: [
+    { key:'title', label:'Guideline / Notification Title', required:true },
+    { key:'authority', label:'Issuing Authority (e.g. ICH, FDA, WHO)', required:true },
+    { key:'region', label:'Applicable Region' },
+    { key:'effectiveDate', label:'Effective Date' },
+    { key:'summary', label:'What Changed (one sentence)' },
+    { key:'url', label:'Source URL' },
+  ],
 };
 
 function formatAgo(iso) {
@@ -73,7 +82,7 @@ async function fetchCategory(category) {
 
 export default function BusinessDev({ onBack }) {
   const [activeTab, setActiveTab] = useState('tenders');
-  const [data, setData] = useState({ tenders:[], 'patent-cliff':[], 'para-iv':[], news:[] });
+  const [data, setData] = useState({ tenders:[], 'patent-cliff':[], 'para-iv':[], news:[], guidelines:[] });
   const [meta, setMeta] = useState({});
   const [loading, setLoading] = useState({});
   const [updating, setUpdating] = useState({});
@@ -286,6 +295,7 @@ export default function BusinessDev({ onBack }) {
             {activeTab === 'patent-cliff' && items.map(t => <PatentCard key={t.id} t={t} onDelete={deleteItem}/>)}
             {activeTab === 'para-iv' && items.map(t => <ParaIVCard key={t.id} t={t} onDelete={deleteItem}/>)}
             {activeTab === 'news' && items.map(t => <NewsCard key={t.id} t={t} onDelete={deleteItem}/>)}
+            {activeTab === 'guidelines' && items.map(t => <GuidelineCard key={t.id} t={t} onDelete={deleteItem}/>)}
           </div>
         )}
       </div>
@@ -411,6 +421,26 @@ function NewsCard({ t, onDelete }) {
         <div style={{ fontSize:10, color:T.muted }}>{t.source}{t.source && t.timeAgo ? ' · ' : ''}{t.timeAgo}</div>
         <SourceBadge source={t._origin}/>
       </div>
+    </div>
+  );
+}
+
+function GuidelineCard({ t, onDelete }) {
+  return (
+    <div style={{ background:T.white, borderRadius:10, border:`1px solid ${T.border}`,
+      borderLeft:`4px solid ${T.purple}`, padding:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+        <span style={{ fontSize:9, fontWeight:800, color:T.purple, background:T.purple+'18', padding:'2px 8px',
+          borderRadius:4, letterSpacing:'0.05em' }}>📘 {t.authority}</span>
+        <DeleteButton onClick={() => onDelete(t.id)}/>
+      </div>
+      <div style={{ fontSize:13, fontWeight:600, color:T.text, marginTop:10, marginBottom:6, lineHeight:1.5 }}>{t.title}</div>
+      {t.summary && <div style={{ fontSize:11, color:T.muted, marginBottom:10, lineHeight:1.5 }}>{t.summary}</div>}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:10, borderTop:`1px solid #F0F0F0` }}>
+        <span style={{ fontSize:10, color:T.muted }}>{t.region}{t.region && t.effectiveDate ? ' · ' : ''}{t.effectiveDate}</span>
+        <SourceBadge source={t._origin}/>
+      </div>
+      {t.dataAsOf && <div style={{ fontSize:9, color:T.dim, marginTop:6 }}>{t.dataAsOf}</div>}
     </div>
   );
 }

@@ -39,6 +39,26 @@ export async function GET(request) {
       return Response.json({ data });
     }
 
+    if (type === 'all-dossiers') {
+      // Portfolio-wide fetch for the assistant — every dossier, its product info,
+      // and its sequences, in one call. Not scoped by product_id like the
+      // regular 'dossiers' type below.
+      const { data, error } = await db
+        .from('dossiers')
+        .select('*, products(name, inn, dosage_form, strength), sequences(id, sequence_number, label, status)')
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.warn('all-dossiers query failed:', error.message);
+        return Response.json({ data: [] });
+      }
+      const enriched = (data || []).map(d => ({
+        ...d,
+        product_name: d.products?.name || d.product_name || '',
+        product_inn: d.products?.inn || d.inn || '',
+      }));
+      return Response.json({ data: enriched });
+    }
+
     if (type === 'dossiers' || type === 'dossier') {
       const { data, error } = await db
         .from('dossiers')
@@ -87,9 +107,20 @@ export async function POST(request) {
     }
     if (tableName === 'dossiers') {
       delete insertData.project_id;  // dossiers links via product_id, not project_id
+      // Auto-calculate compliance dates if not explicitly provided
+      const now = new Date();
+      if (!insertData.annual_filing_due) {
+        const d = new Date(now); d.setFullYear(d.getFullYear() + 1);
+        insertData.annual_filing_due = d.toISOString().slice(0, 10);
+      }
+      if (!insertData.registration_renewal_due) {
+        const d = new Date(now); d.setFullYear(d.getFullYear() + 5);
+        insertData.registration_renewal_due = d.toISOString().slice(0, 10);
+      }
       // Only keep known dossier columns — strip form-only fields that may not exist in DB yet
       const dossierCols = ['product_id','country','authority','submission_type','dossier_format',
-        'm4q_version','status','inn','api_manufacturer','dosage_form','strength','applicant'];
+        'm4q_version','status','inn','api_manufacturer','dosage_form','strength','applicant',
+        'annual_filing_due','registration_renewal_due'];
       Object.keys(insertData).forEach(k => {
         if (!dossierCols.includes(k)) delete insertData[k];
       });
@@ -104,13 +135,16 @@ export async function POST(request) {
     if (error) {
       // If error is about unknown columns, retry without new fields
       if (error.message && (error.message.includes('column') || error.message.includes('inn') ||
-          error.message.includes('api_manufacturer') || error.message.includes('dosage_form'))) {
+          error.message.includes('api_manufacturer') || error.message.includes('dosage_form') ||
+          error.message.includes('annual_filing_due') || error.message.includes('registration_renewal_due'))) {
         const fallbackData = { ...insertData };
         delete fallbackData.inn;
         delete fallbackData.api_manufacturer;
         delete fallbackData.dosage_form;
         delete fallbackData.strength;
         delete fallbackData.applicant;
+        delete fallbackData.annual_filing_due;
+        delete fallbackData.registration_renewal_due;
         const { data: r2, error: e2 } = await db.from(tableName).insert(fallbackData).select().single();
         if (e2) throw e2;
         // If creating a dossier, auto-generate nodes

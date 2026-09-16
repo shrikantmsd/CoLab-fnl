@@ -10,6 +10,7 @@ const T = {
   amber: '#92400E', amberBg:'#FEF3C7', amberBorder:'#FCD34D',
   red:   '#991B1B', redBg:  '#FEE2E2', redBorder:  '#FCA5A5',
   blue:  '#1E40AF', blueBg: '#DBEAFE', blueBorder: '#93C5FD',
+  purple:'#7C3AED', purpleBg:'#EDE9FE', purpleBorder:'#C4B5FD',
 };
 
 const REGION_FLAGS = {
@@ -213,8 +214,9 @@ function IntelligenceStrip({ onNavigate }) {
   const [patents, setPatents] = useState(null);
   const [paraIv, setParaIv] = useState(null);
   const [news, setNews] = useState(null);
+  const [guidelines, setGuidelines] = useState(null);
   const [lastUpdate, setLastUpdate] = useState({});
-  const [loading, setLoading] = useState({ tenders:true, 'patent-cliff':true, 'para-iv':true, news:true });
+  const [loading, setLoading] = useState({ tenders:true, 'patent-cliff':true, 'para-iv':true, news:true, guidelines:true });
 
   const loadType = useCallback(async (type, setter) => {
     setLoading(p => ({ ...p, [type]: true }));
@@ -235,6 +237,7 @@ function IntelligenceStrip({ onNavigate }) {
     loadType('patent-cliff', setPatents);
     loadType('para-iv', setParaIv);
     loadType('news', setNews);
+    loadType('guidelines', setGuidelines);
   }, [loadType]);
 
   return (
@@ -346,6 +349,28 @@ function IntelligenceStrip({ onNavigate }) {
                 </div>
               );
             })}
+          </div>
+        )}
+      </IntelSection>
+
+      <IntelSection
+        icon="📘" title="Guideline Updates" accent={T.purple} count={guidelines?.length}
+        lastUpdate={lastUpdate.guidelines}
+        loading={loading.guidelines} onViewAll={() => onNavigate?.('bizdev')}
+        onRefresh={() => loadType('guidelines', setGuidelines)}>
+        {loading.guidelines ? <IntelSkeleton/> : !guidelines?.length ? <IntelEmpty category="guidelines" onViewAll={() => onNavigate?.('bizdev')}/> : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {guidelines.slice(0,5).map((g,i) => (
+              <div key={g.id || i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
+                background:T.light, borderRadius:8 }}>
+                <span style={{ fontSize:9, fontWeight:800, color:T.purple, background:T.purple+'18', padding:'2px 7px',
+                  borderRadius:4, flexShrink:0, whiteSpace:'nowrap' }}>📘 {g.authority}</span>
+                <span style={{ fontSize:12, color:T.text, flex:1, overflow:'hidden',
+                  textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.title}</span>
+                <span style={{ fontSize:10, color:T.dim, flexShrink:0 }}>{g.effectiveDate}</span>
+                {g._origin === 'manual' && <SourceTag source="manual"/>}
+              </div>
+            ))}
           </div>
         )}
       </IntelSection>
