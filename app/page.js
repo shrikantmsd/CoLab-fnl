@@ -37,6 +37,11 @@ const ProjectManager = dynamic(
   { ssr: false, loading: () => <Loader text="Loading Project Manager..." /> }
 );
 
+const Settings = dynamic(
+  () => import('../components/Settings'),
+  { ssr: false, loading: () => <Loader text="Loading Settings..." /> }
+);
+
 function Loader({ text }) {
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh',
@@ -58,12 +63,14 @@ const TABS = [
   { id:'review',    label:'Document Review',    icon:'📋' },
   { id:'india',     label:'India Regulatory',   icon:'🇮🇳' },
   { id:'bizdev',    label:'Business Dev',       icon:'📢' },
+  { id:'settings',  label:'Settings',           icon:'⚙️' },
 ];
 
 export default function Home() {
   const [status,    setStatus]    = useState('checking');
   const [input,     setInput]     = useState('');
   const [error,     setError]     = useState('');
+  const [checkingPw, setCheckingPw] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
 
   useEffect(() => {
@@ -71,9 +78,25 @@ export default function Home() {
     setStatus(ok === 'true' ? 'app' : 'login');
   }, []);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    if (input === PASSWORD) {
+    setCheckingPw(true);
+    let ok = false;
+    try {
+      const res = await fetch('/api/settings/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: input }),
+      });
+      const json = await res.json();
+      ok = !!json.ok;
+    } catch {
+      // Endpoint unreachable for any reason — fall back to the original,
+      // always-reliable direct check so login never regresses.
+      ok = input === PASSWORD;
+    }
+    setCheckingPw(false);
+    if (ok) {
       sessionStorage.setItem('raisa_ok', 'true');
       setStatus('app');
     } else {
@@ -174,6 +197,13 @@ export default function Home() {
           display: activeTab==='india' ? 'block' : 'none' }}>
           <IndiaRegulatory />
         </div>
+
+        {/* Settings */}
+        {activeTab === 'settings' && (
+          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column' }}>
+            <Settings />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -227,11 +257,12 @@ export default function Home() {
               {error}
             </div>
           )}
-          <button type="submit"
+          <button type="submit" disabled={checkingPw}
             style={{ width:'100%', padding:11, background:'#1A3D6B', color:'#fff',
               border:'none', borderRadius:7, fontSize:14, fontWeight:600,
-              cursor:'pointer', fontFamily:'Segoe UI,sans-serif' }}>
-            Enter RAISA
+              cursor: checkingPw ? 'wait' : 'pointer', opacity: checkingPw ? 0.7 : 1,
+              fontFamily:'Segoe UI,sans-serif' }}>
+            {checkingPw ? 'Checking…' : 'Enter RAISA'}
           </button>
           <div style={{ textAlign:'center', marginTop:18, paddingTop:16,
             borderTop:'1px solid #F0F0F0', fontSize:11, color:'#C8C8C8' }}>
