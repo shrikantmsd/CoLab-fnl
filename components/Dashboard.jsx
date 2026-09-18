@@ -1,17 +1,8 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import { useTheme } from '../lib/theme';
 
-/* ── Theme ─────────────────────────────────────────────────────────────────── */
-const T = {
-  navy:  '#1A3D6B', mid:  '#2B579A', light: '#EEF4FF',
-  text:  '#1F2937', muted:'#6B7280', dim:  '#9CA3AF',
-  bg:    '#F0F4F8', white:'#FFFFFF', border:'#E5E7EB',
-  green: '#166534', greenBg:'#DCFCE7', greenBorder:'#86EFAC',
-  amber: '#92400E', amberBg:'#FEF3C7', amberBorder:'#FCD34D',
-  red:   '#991B1B', redBg:  '#FEE2E2', redBorder:  '#FCA5A5',
-  blue:  '#1E40AF', blueBg: '#DBEAFE', blueBorder: '#93C5FD',
-  purple:'#7C3AED', purpleBg:'#EDE9FE', purpleBorder:'#C4B5FD',
-};
+/* ── Theme is provided by useTheme() from lib/theme.js — see each component below ── */
 
 const REGION_FLAGS = {
   'United States':'🇺🇸','Europe':'🇪🇺','India':'🇮🇳','Japan':'🇯🇵',
@@ -74,6 +65,7 @@ function StatCard({ icon, label, value, sub, gradient, onClick }) {
 }
 
 function MiniProgress({ pct, color }) {
+  const T = useTheme();
   return (
     <div style={{ width:'100%', height:5, background:'#E5E7EB', borderRadius:3, overflow:'hidden' }}>
       <div style={{ width:`${pct}%`, height:'100%', background:color||T.navy, borderRadius:3,
@@ -83,6 +75,7 @@ function MiniProgress({ pct, color }) {
 }
 
 function ActivityDot({ type }) {
+  const T = useTheme();
   const colors = { upload:'#2563EB', review:'#16A34A', submit:'#D97706',
                    create:'#7C3AED', approve:'#059669', query:'#DC2626' };
   return <div style={{ width:8, height:8, borderRadius:'50%',
@@ -210,6 +203,7 @@ function WorldMap({ countries }) {
    database read for every user, every page view.
    ══════════════════════════════════════════════════════════════════════════ */
 function IntelligenceStrip({ onNavigate }) {
+  const T = useTheme();
   const [tenders, setTenders] = useState(null);
   const [patents, setPatents] = useState(null);
   const [paraIv, setParaIv] = useState(null);
@@ -402,6 +396,7 @@ function SourceTag({ source }) {
 }
 
 function IntelSection({ icon, title, accent, count, lastUpdate, loading, onViewAll, onRefresh, children }) {
+  const T = useTheme();
   const agoText = formatAgo(lastUpdate);
   return (
     <div style={{ background:T.white, borderRadius:12, border:`1px solid ${T.border}`,
@@ -437,6 +432,7 @@ function IntelSection({ icon, title, accent, count, lastUpdate, loading, onViewA
 }
 
 function IntelSkeleton() {
+  const T = useTheme();
   return (
     <div style={{ display:'flex', gap:12 }}>
       {[1,2,3].map(i => (
@@ -449,6 +445,7 @@ function IntelSkeleton() {
 }
 
 function IntelEmpty({ category, onViewAll }) {
+  const T = useTheme();
   return (
     <div style={{ padding:'8px 0', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
       <div style={{ fontSize:12, color:T.dim, display:'flex', alignItems:'center', gap:6 }}>
@@ -464,6 +461,7 @@ function IntelEmpty({ category, onViewAll }) {
 }
 
 export default function Dashboard({ onNavigate }) {
+  const T = useTheme();
   const [summary, setSummary]     = useState(null);
   const [dossiers, setDossiers]   = useState([]);
   const [activity, setActivity]   = useState([]);
@@ -573,7 +571,7 @@ export default function Dashboard({ onNavigate }) {
      ══════════════════════════════════════════════════════════════════════════ */
   return (
     <div style={{ height:'100%', overflowY:'auto', background:T.bg, padding:'20px 24px',
-      fontFamily:"'Segoe UI', Arial, sans-serif" }}>
+      fontFamily:T.fontFamily }}>
 
       {/* ── HEADER ───────────────────────────────────────────────────────── */}
       <div style={{ display:'flex', alignItems:'center', marginBottom:20, gap:16, flexWrap:'wrap' }}>
