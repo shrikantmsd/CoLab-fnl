@@ -36,11 +36,12 @@ function StatusPill({ status }) {
   );
 }
 
-function StatCard({ icon, label, value, sub, gradient, onClick }) {
+function StatCard({ icon, label, value, sub, gradient, textColor = '#fff', onClick }) {
+  const subBorder = textColor === '#fff' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)';
   return (
     <div onClick={onClick}
       style={{ background:gradient, borderRadius:10, padding:'18px 20px',
-        cursor:onClick?'pointer':'default', color:'#fff',
+        cursor:onClick?'pointer':'default', color:textColor,
         transition:'all .18s', position:'relative', overflow:'hidden',
         boxShadow:'0 2px 8px rgba(0,0,0,0.15)', minHeight:110,
         display:'flex', flexDirection:'column', justifyContent:'space-between' }}
@@ -55,7 +56,7 @@ function StatCard({ icon, label, value, sub, gradient, onClick }) {
         <div style={{ fontSize:13, fontWeight:600, marginTop:4, opacity:0.9 }}>{label}</div>
       </div>
       {sub && (
-        <div style={{ marginTop:10, paddingTop:8, borderTop:'1px solid rgba(255,255,255,0.2)',
+        <div style={{ marginTop:10, paddingTop:8, borderTop:`1px solid ${subBorder}`,
           fontSize:11, opacity:0.8, display:'flex', alignItems:'center', gap:4 }}>
           {sub} {onClick && <span style={{ marginLeft:'auto' }}>→</span>}
         </div>
@@ -67,7 +68,7 @@ function StatCard({ icon, label, value, sub, gradient, onClick }) {
 function MiniProgress({ pct, color }) {
   const T = useTheme();
   return (
-    <div style={{ width:'100%', height:5, background:'#E5E7EB', borderRadius:3, overflow:'hidden' }}>
+    <div style={{ width:'100%', height:5, background:T.border, borderRadius:3, overflow:'hidden' }}>
       <div style={{ width:`${pct}%`, height:'100%', background:color||T.navy, borderRadius:3,
         transition:'width .4s ease' }}/>
     </div>
@@ -254,7 +255,7 @@ function IntelligenceStrip({ onNavigate }) {
                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.title}</div>
                   <div style={{ fontSize:10, color:T.muted, marginBottom:8 }}>{t.authority} · {t.country}</div>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <span style={{ fontSize:12, fontWeight:700, color:'#166534' }}>{t.value}</span>
+                    <span style={{ fontSize:12, fontWeight:700, color:T.green }}>{t.value}</span>
                     <span style={{ fontSize:10, fontWeight:600, color: urgent ? T.red : T.muted }}>
                       {urgent ? '🔴' : '⏰'} {t.daysLeft != null ? `${t.daysLeft}d left` : t.deadline}
                     </span>
@@ -272,19 +273,19 @@ function IntelligenceStrip({ onNavigate }) {
 
       {/* Patent Cliff */}
       <IntelSection
-        icon="⏰" title="Patent Cliff Monitor" accent="#D97706" count={patents?.length}
+        icon="⏰" title="Patent Cliff Monitor" accent={T.amber} count={patents?.length}
         lastUpdate={lastUpdate['patent-cliff']}
         loading={loading['patent-cliff']} onViewAll={() => onNavigate?.('bizdev')}
         onRefresh={() => loadType('patent-cliff', setPatents)}>
         {loading['patent-cliff'] ? <IntelSkeleton/> : !patents?.length ? <IntelEmpty category="patent-cliff" onViewAll={() => onNavigate?.('bizdev')}/> : (
           <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:4 }}>
             {patents.slice(0,4).map((p,i) => (
-              <div key={p.id || i} style={{ minWidth:200, background:'#FFFBEB', borderRadius:10, padding:14,
-                border:`1px solid ${T.amberBorder}`, borderLeft:'4px solid #D97706', flexShrink:0 }}>
+              <div key={p.id || i} style={{ minWidth:200, background:T.amberBg, borderRadius:10, padding:14,
+                border:`1px solid ${T.amberBorder}`, borderLeft:`4px solid ${T.amber}`, flexShrink:0 }}>
                 <div style={{ fontSize:12, fontWeight:700, color:T.text }}>💊 {p.brand}</div>
                 <div style={{ fontSize:10, color:T.muted, marginBottom:6 }}>{p.molecule}</div>
                 <div style={{ fontSize:10, color:T.text, marginBottom:8 }}>{p.originator}</div>
-                <div style={{ fontSize:11, fontWeight:700, color:'#D97706' }}>⏰ {p.expiryDate}</div>
+                <div style={{ fontSize:11, fontWeight:700, color:T.amber }}>⏰ {p.expiryDate}</div>
                 {p._origin === 'manual' && <SourceTag source="manual"/>}
               </div>
             ))}
@@ -301,10 +302,10 @@ function IntelligenceStrip({ onNavigate }) {
         {loading['para-iv'] ? <IntelSkeleton/> : !paraIv?.length ? <IntelEmpty category="para-iv" onViewAll={() => onNavigate?.('bizdev')}/> : (
           <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:4 }}>
             {paraIv.slice(0,4).map((p,i) => {
-              const colorMap = { red:'#C50F1F', green:'#166534', amber:'#D97706' };
+              const colorMap = { red:T.red, green:T.green, amber:T.amber };
               const c = colorMap[p.statusColor] || T.muted;
               return (
-                <div key={p.id || i} style={{ minWidth:220, background:'#FFF5F5', borderRadius:10, padding:14,
+                <div key={p.id || i} style={{ minWidth:220, background:T.redBg, borderRadius:10, padding:14,
                   border:`1px solid ${T.redBorder}`, borderLeft:`4px solid ${c}`, flexShrink:0 }}>
                   <div style={{ fontSize:12, fontWeight:700, color:T.text }}>💊 {p.brand}</div>
                   <div style={{ fontSize:10, color:T.muted, marginBottom:6 }}>{p.molecule} · {p.challengers}</div>
@@ -328,7 +329,7 @@ function IntelligenceStrip({ onNavigate }) {
         {loading.news ? <IntelSkeleton/> : !news?.length ? <IntelEmpty category="news" onViewAll={() => onNavigate?.('bizdev')}/> : (
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {news.slice(0,5).map((n,i) => {
-              const catColors = { BREAKING:'#C50F1F', APPROVAL:'#166534', REGULATORY:T.mid, MERGER:'#D97706', RECALL:'#C50F1F' };
+              const catColors = { BREAKING:T.red, APPROVAL:T.green, REGULATORY:T.mid, MERGER:T.amber, RECALL:T.red };
               const catIcons = { BREAKING:'🔴', APPROVAL:'🟢', REGULATORY:'📋', MERGER:'💰', RECALL:'⚠️' };
               const c = catColors[n.category] || T.muted;
               return (
@@ -388,7 +389,7 @@ function formatAgo(iso) {
 
 function SourceTag({ source }) {
   return (
-    <div style={{ fontSize:8, fontWeight:700, color:'#7C3AED', background:'#F5F0FF',
+    <div style={{ fontSize:8, fontWeight:700, color:T.purple, background:T.purpleBg,
       padding:'1px 6px', borderRadius:3, marginTop:6, display:'inline-block' }}>
       ✍️ MANUAL
     </div>
@@ -623,14 +624,14 @@ export default function Dashboard({ onNavigate }) {
          ═════════════════════════════════════════════════════════════════════ */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14, marginBottom:20 }}>
         <StatCard icon="📁" label="Active Projects" value={summary?.totalProjects||0}
-          gradient="linear-gradient(135deg, #17A2B8, #138496)"
+          gradient={T.statGradients[0]} textColor={T.statTextColors[0]}
           onClick={() => onNavigate?.('projects')} sub="More info"/>
         <StatCard icon="📦" label="Total Dossiers" value={summary?.totalDossiers||0}
-          gradient="linear-gradient(135deg, #28A745, #1E7E34)" sub="Across all markets"/>
+          gradient={T.statGradients[1]} textColor={T.statTextColors[1]} sub="Across all markets"/>
         <StatCard icon="⏳" label="In Progress" value={summary?.inProgress||0}
-          gradient="linear-gradient(135deg, #FFC107, #D39E00)" sub="Active submissions"/>
+          gradient={T.statGradients[2]} textColor={T.statTextColors[2]} sub="Active submissions"/>
         <StatCard icon="✓" label="Approved" value={summary?.approved||0}
-          gradient="linear-gradient(135deg, #DC3545, #BD2130)" sub="Marketing authorisations"/>
+          gradient={T.statGradients[3]} textColor={T.statTextColors[3]} sub="Marketing authorisations"/>
       </div>
 
       {/* ═════════════════════════════════════════════════════════════════════
@@ -650,13 +651,13 @@ export default function Dashboard({ onNavigate }) {
             { icon:'📤', label:'Upload Docs',        tab:'projects' },
           ].map(a => (
             <div key={a.label} onClick={() => onNavigate?.(a.tab)}
-              style={{ padding:'14px 8px', background:'#F8FAFD', borderRadius:8,
+              style={{ padding:'14px 8px', background:T.light, borderRadius:8,
                 border:`1px solid ${T.border}`, cursor:'pointer', textAlign:'center',
                 transition:'all .15s' }}
               onMouseOver={e => { e.currentTarget.style.background=T.light;
                 e.currentTarget.style.borderColor=T.mid;
                 e.currentTarget.style.transform='translateY(-1px)'; }}
-              onMouseOut={e => { e.currentTarget.style.background='#F8FAFD';
+              onMouseOut={e => { e.currentTarget.style.background=T.light;
                 e.currentTarget.style.borderColor=T.border;
                 e.currentTarget.style.transform='translateY(0)'; }}>
               <div style={{ fontSize:22, marginBottom:6 }}>{a.icon}</div>
@@ -778,7 +779,7 @@ export default function Dashboard({ onNavigate }) {
             <div style={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                 <thead>
-                  <tr style={{ background:'#F8FAFD' }}>
+                  <tr style={{ background:T.light }}>
                     {['Product','Country / Authority','Format','Status','Progress'].map(h => (
                       <th key={h} style={{ padding:'8px 14px', textAlign:'left',
                         fontWeight:700, fontSize:10, color:T.muted, textTransform:'uppercase',
@@ -793,8 +794,8 @@ export default function Dashboard({ onNavigate }) {
                     const flag = REGION_FLAGS[d.country] || '🌐';
                     return (
                       <tr key={d.id||i}
-                        style={{ borderBottom:'1px solid #F3F4F6', cursor:'pointer' }}
-                        onMouseOver={e => e.currentTarget.style.background='#F8FAFD'}
+                        style={{ borderBottom:`1px solid ${T.border}`, cursor:'pointer' }}
+                        onMouseOver={e => e.currentTarget.style.background=T.light}
                         onMouseOut={e => e.currentTarget.style.background='transparent'}
                         onClick={() => onNavigate?.('projects')}>
                         <td style={{ padding:'10px 14px' }}>
@@ -817,7 +818,7 @@ export default function Dashboard({ onNavigate }) {
                         <td style={{ padding:'10px 14px' }}><StatusPill status={d.status}/></td>
                         <td style={{ padding:'10px 14px', width:120 }}>
                           <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                            <MiniProgress pct={pct} color={pct===100?'#16A34A':pct>50?T.navy:'#D97706'}/>
+                            <MiniProgress pct={pct} color={pct===100?T.green:pct>50?T.navy:T.amber}/>
                             <span style={{ fontSize:10, color:T.muted, minWidth:28, fontFamily:'monospace' }}>{pct}%</span>
                           </div>
                           <div style={{ fontSize:9, color:T.dim, marginTop:2 }}>{d.node_counts?.uploaded||0}/{d.node_counts?.total||0} docs</div>
@@ -844,7 +845,7 @@ export default function Dashboard({ onNavigate }) {
                 <div style={{ fontSize:11, marginTop:4, lineHeight:1.6 }}>Upload documents to dossiers to see activity here</div>
               </div>
             ) : activity.map((a, i) => (
-              <div key={i} style={{ padding:'10px 16px', borderBottom:'1px solid #F3F4F6',
+              <div key={i} style={{ padding:'10px 16px', borderBottom:`1px solid ${T.border}`,
                 display:'flex', gap:10, alignItems:'flex-start' }}>
                 <ActivityDot type={a.type}/>
                 <div style={{ flex:1, minWidth:0 }}>
@@ -869,11 +870,11 @@ export default function Dashboard({ onNavigate }) {
       {/* ═════════════════════════════════════════════════════════════════════
          SECTION 5 — SYSTEM STATUS BAR
          ═════════════════════════════════════════════════════════════════════ */}
-      <div style={{ padding:'10px 18px', background:'#F8FAFD',
+      <div style={{ padding:'10px 18px', background:T.light,
         borderRadius:8, border:`1px solid ${T.border}`, display:'flex',
         alignItems:'center', gap:16, fontSize:11, color:T.muted, flexWrap:'wrap' }}>
         <span style={{ display:'flex', alignItems:'center', gap:5 }}>
-          <span style={{ width:6, height:6, borderRadius:'50%', background:'#16A34A', display:'inline-block' }}/>
+          <span style={{ width:6, height:6, borderRadius:'50%', background:T.green, display:'inline-block' }}/>
           RAISA v2.0 — Connected
         </span>
         <span>ICH M4Q(R1) · eCTD v3.2.2 + v4.0 · NDCT Rules 2019</span>
